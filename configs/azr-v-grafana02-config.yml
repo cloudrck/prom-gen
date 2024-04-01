@@ -1,0 +1,117 @@
+server:
+  log_level: ${AGENT_LOG_LEVEL:='info'}
+
+metrics:
+  wal_directory: /etc/grafana-agent
+  global:
+    scrape_interval: 60s
+    remote_write:
+      - url: ${MIMIR_CPU_MEM_DISK_TENANT_URL}
+        write_relabel_configs: []
+    external_labels:
+      owner: myname
+      team: SRE
+      dept: dt325
+      env: dev
+      app: grafana-agent-intermediary
+      datacenter: azure-east
+
+  configs:
+    # Take all node_ and windows_ metrics, drop any that are prefixed with windows_service or windows_process
+    # Send the rest to the cpu-mem-disk-metrics tenant in Mimir
+    # -----------------------------------------------------------------------------------------
+    - name: cpu-mem-disk
+      remote_write:
+        - url: ${MIMIR_CPU_MEM_DISK_TENANT_URL}
+          write_relabel_configs:
+            - action: keep
+              source_labels: [__name__]
+              separator: ;
+              regex: ^(node|windows)_.+$
+            - action: drop
+              source_labels: [__name__]
+              separator: ;
+              regex: ^windows_(?:service|process)_.+$
+
+    # Take all windows_ metrics that start with windows_service or windows_process
+    # Send them to the service-process-metrics tenant in Mimir
+    # ----------------------------------------------------------------------------------------
+    - name: service-process
+      remote_write:
+        - url: ${MIMIR_SERVICE_PROCESS_TENANT_URL}
+          write_relabel_configs:
+            - action: keep
+              source_labels: [__name__]
+              separator: ;
+              regex: ^windows_(?:service|process)_.+$
+
+    # Take all agent metrics that start with agent_
+    # Send them to the agent-metrics tenant in Mimir
+    # ----------------------------------------------------------------------------------------
+    - name: agent
+      remote_write:
+        - url: ${MIMIR_AGENT_TENANT_URL}
+          write_relabel_configs:
+            - action: keep
+              source_labels: [__name__]
+              separator: ;
+              regex: ^(agent)_.+$
+
+# logs:
+#   positions_directory: /etc/grafana-agent/promtail-positions.yaml
+#   configs:
+#   - name: default
+#     clients:
+#       - url: https://loki-write.prod.azure.example.net/loki/api/v1/push
+#         tenant_id: example
+#         tls_config:
+#           insecure_skip_verify: true
+#     scrape_configs:
+#     - job_name: agent-push
+#       loki_push_api:
+#         use_incoming_timestamp: true
+#     - job_name: varlogmessages
+#       static_configs:
+#         - targets: [localhost]
+#           labels:
+#             job: varlogsmessages
+#             __path__: /var/log/messages
+
+integrations:
+  metrics:
+    autoscrape:
+      enable: true
+
+  node_exporter:
+    autoscrape:
+      metrics_instance: cpu-mem-disk
+      relabel_configs:
+        # strip the port from instance and assign as a label
+        - source_labels: [instance]
+          target_label: port
+          regex: .+:([0-9]+).*
+          replacement: $1
+        # assign the instance label without the port 
+        - source_labels: [instance]
+          target_label: instance
+          regex: ([^:\/]+)(:[0-9]+)?
+          replacement: $1      
+#    enabled: true
+    procfs_path: /proc
+    sysfs_path: /sys
+
+  agent:
+    autoscrape:
+      metrics_instance: agent
+      relabel_configs:
+        # strip the port from instance and assign as a label
+        - source_labels: [instance]
+          target_label: port
+          regex: .+:([0-9]+).*
+          replacement: $1
+        # assign the instance label without the port 
+        - source_labels: [instance]
+          target_label: instance
+          regex: ([^:\/]+)(:[0-9]+)?
+          replacement: $1      
+#    enabled: true

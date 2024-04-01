@@ -1,0 +1,154 @@
+metrics:
+  wal_directory: /etc/grafana-agent
+  global:
+    scrape_interval: 60s
+    # This is an example of writing from one Grafana agent to another one, the endpoint is different from Mimir
+    remote_write:
+      - url: ${CPU_MEM_DISK_HOP_URL}
+        write_relabel_configs: []
+    # Metrics external labels, which are a static set of labels we attach to every metric
+    external_labels:
+      owner: ${OWNER_LABEL}
+      team: ${TEAM_LABEL}
+      dept: ${DEPT_LABEL}
+      env: ${ENV_LABEL}
+      app: ${APP_LABEL}
+      datacenter: ${DATACENTER_LABEL}
+      subscription: ${SUBSCRIPTION_LABEL}
+      virtual: ${VIRTUAL_LABEL}
+      silence: ${SILENCE_STATUS_LABEL}
+      los: ${LEVEL_OF_SERVICE_LABEL}
+      supporttier: ${SUPPORT_TIER_LABEL}
+  configs:
+    # This config will keep only metrics that are prefixed with node_
+    # and drop any that are node_systemd_ or node_process_
+    # The second URL config keeps those node_systemd_ or node_process_ metrics
+    # and sends them to a different URL
+    # The metrics are then sent to the middle-server running a Grafana agent to a
+    # URL that is specific to each "instance" which is cpu-mem-disk
+    #----------------------------------------------------------------------------------------------- 
+    - name: linux_node_metrics-middle-server
+      remote_write:
+        - url: ${CPU_MEM_DISK_HOP_URL}
+          write_relabel_configs:
+            - action: keep
+              source_labels: [__name__]
+              separator: ;
+              regex: ^(node)_.+$
+            - action: drop
+              source_labels: [__name__]
+              separator: ;
+              regex: ^node_(?:systemd|process)_.+$
+        - url: ${SERVICE_PROCESS_HOP_URL}
+          write_relabel_configs:
+            - action: keep
+              source_labels: [__name__]
+              separator: ;
+              regex: ^node_(?:systemd|process)_.+$        
+      scrape_configs: []
+
+    # This config will keep only metrics that are prefixed with agent_ 
+    # The metrics are then sent to the middle-server running a Grafana agent to a
+    # URL that is specific to each "instance" which is service-process in the config below
+    #----------------------------------------------------------------------------------------------- 
+    - name: agent-metrics-middle-server
+      remote_write:
+        - url: ${AGENT_HOP_URL}
+          write_relabel_configs:
+            - action: keep
+              source_labels: [__name__]
+              separator: ;
+              regex: ^agent_.+$
+      scrape_configs: []
+
+logs:
+
+  # We define a directory for the promtail-positions files
+  positions_directory: /etc/grafana-agent/promtail-positions
+  
+  configs:
+    
+    - name: default
+      
+      clients:
+        - url: ${LOGS_HOP_URL}
+          tls_config:
+            insecure_skip_verify: true
+          external_labels:
+            owner: ${OWNER_LABEL}
+            team: ${TEAM_LABEL}
+            dept: ${DEPT_LABEL}
+            env: ${ENV_LABEL}
+            app: ${APP_LABEL}
+            datacenter: ${DATACENTER_LABEL}
+            subscription: ${SUBSCRIPTION_LABEL}
+            virtual: ${VIRTUAL_LABEL}
+            hostname: ${HOSTNAME}
+            silence: ${SILENCE_STATUS_LABEL}
+            los: ${LEVEL_OF_SERVICE_LABEL}
+            supporttier: ${SUPPORT_TIER_LABEL}
+      
+      positions:
+        filename: /etc/grafana-agent/promtail-positions/positions.yml
+
+      scrape_configs:
+      
+      # This job pulls logs from /var/log/messages and adds the additional labels of the job
+      # and __path__ of the logs 
+        - job_name: varlogsmessages
+          static_configs:
+            - targets: [localhost]
+              labels:
+                job: varlogsmessages
+                __path__: /var/log/messages
+
+      # # this is an example of taking an application log from an arbitrary location 
+      # - job_name: CHANGEME
+      #   static_configs:
+      #   - targets: 
+      #     - localhost
+      #     labels:
+      #       __path__: /path/to/application/logfiles.log # CHANGEME can also use a glob i.e. /path/to/logsdir/logs.* and more
+
+
+# This requires passing the flag: -enable-features=integrations-next
+# in order to enable the integrations block.
+# -----------------------------------------------------------------------------------------
+integrations:
+  metrics:
+    autoscrape:
+      enable: true
+
+  # The node_exporter provides *nix kernel level metrics
+  node_exporter:
+    autoscrape:
+      metrics_instance: linux_node_metrics-middle-server
+      relabel_configs:
+        # strip the port from instance and assign as a label
+        - source_labels: [instance]
+          target_label: port
+          regex: .+:([0-9]+).*
+          replacement: $1
+        # assign the instance label without the port 
+        - source_labels: [instance]
+          target_label: instance
+          regex: ([^:\/]+)(:[0-9]+)?
+          replacement: $1
+    procfs_path: /proc
+    sysfs_path: /sys
+
+  # The agent integration provides useful information on the actual agent installed
+  agent:
+    autoscrape:
+      metrics_instance: agent-metrics-middle-server
+      relabel_configs:
+        # strip the port from instance and assign as a label
+        - source_labels: [instance]
+          target_label: port
+          regex: .+:([0-9]+).*
+          replacement: $1
+        # assign the instance label without the port 
+        - source_labels: [instance]
+          target_label: instance
+          regex: ([^:\/]+)(:[0-9]+)?
+          replacement: $1

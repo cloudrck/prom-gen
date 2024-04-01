@@ -1,0 +1,37 @@
+## Path:
+## Description: Grafana Agent monitoring agent settings
+## Type:        string
+## Default:     ""
+## ServiceRestart: grafana-agent
+#
+# Command line options for grafana-agent
+#
+# The configuration file holding the agent config
+CONFIG_FILE="/etc/grafana-agent.yaml"
+
+# Any user defined arguments
+CUSTOM_ARGS="-server.http.address=0.0.0.0:12345 -server.grpc.address=0.0.0.0:12346 -enable-features=integrations-next -config.expand-env=true -disable-reporting"
+
+# Restart on system upgrade. Default to true
+RESTART_ON_UPGRADE=true
+
+# Config environment variables
+AGENT_LOG_LEVEL="info"
+CPU_MEM_DISK_HOP_URL="{{.CPUMemDiskHopURL}}"
+SERVICE_PROCESS_HOP_URL="{{.ServiceProcessHopURL}}"
+AGENT_HOP_URL="{{.AgentHopURL}}"
+LOGS_HOP_URL="{{.LogsHopURL}}"
+
+# external_labels variables
+# These need to be adjusted per endpoint/server/vm/node
+OWNER_LABEL="{{.OwnerLabel}}"
+TEAM_LABEL="{{.TeamLabel}}"
+DEPT_LABEL="{{.DeptLabel}}"
+ENV_LABEL="{{.EnvLabel}}"
+APP_LABEL="{{.AppLabel}}"
+DATACENTER_LABEL="{{.DatacenterLabel}}"
+SUBSCRIPTION_LABEL="{{.SubLabel}}"
+SILENCE_STATUS_LABEL="{{.SilenceLabel}}"
+LEVEL_OF_SERVICE_LABEL="{{.LosLabel}}"
+SUPPORT_TIER_LABEL="{{.SupportTierLabel}}"
+VIRTUAL_LABEL="{{.VirtualLabel}}"

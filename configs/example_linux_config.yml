@@ -1,0 +1,82 @@
+metrics:
+  wal_directory: /etc/grafana-agent
+  global:
+    scrape_interval: 60s
+    # This is an example of writing from one Grafana agent to another one, the endpoint is different from Mimir
+    remote_write:
+    - url: https://azr-v-grafana02.example.net:12345/agent/api/v1/metrics/instance/default/write
+    # Metrics external labels, which are a static set of labels we attach to every metric
+    external_labels:
+      owner: EXAMPLE
+      team: EXAMPLE
+      dept: EXAMPLE
+      env: EXAMPLE
+      app: EXAMPLE
+      datacenter: EXAMPLE
+
+logs:
+  global:
+    # Logs external labels, which are a static set of labels we attach to every single log
+    external_labels:
+      owner: EXAMPLE
+      team: EXAMPLE
+      dept: EXAMPLE
+      env: EXAMPLE
+      app: EXAMPLE
+      datacenter: EXAMPLE 
+  positions_directory: /etc/grafana-agent/promtail-positions.yaml
+  configs:
+  - name: default
+    clients:
+      - url: https://azr-v-grafana02.example.net:12345/loki/api/v1/push
+        tls_config:
+          insecure_skip_verify: true
+    scrape_configs:
+    - job_name: varlogsmessages
+      static_configs:
+      - targets:
+        - localhost
+        labels:
+          job: varlogsmessages
+          __path__: /var/log/messages
+    # this is an example of taking an application log from an arbitrary location 
+    - job_name: example_application_log
+      static_configs:
+      - target: 
+        - localhost
+        labels:
+          __path__: /path/to/application/logfiles.log # can also use a glob i.e. /path/to/logsdir/logs.* and more
+
+integrations:
+  # The node_exporter provides *nix kernel level metrics
+  node_exporter:
+    enabled: true
+    enable_collectors:
+      - systemd,processes
+    procfs_path: /proc
+    sysfs_path: /sys
+    relabel_configs:
+      # strip the port from instance and assign as a label
+      - source_labels: [instance]
+        target_label: port
+        regex: .+:([0-9]+).*
+        replacement: $1
+      # assign the instance label without the port 
+      - source_labels: [instance]
+        target_label: instance
+        regex: ([^:\/]+)(:[0-9]+)?
+        replacement: $1
+  # The agent integration provides useful information on the actual agent installed
+  agent:
+    enabled: true
+    relabel_configs:
+      # strip the port from instance and assign as a label
+      - source_labels: [instance]
+        target_label: port
+        regex: .+:([0-9]+).*
+        replacement: $1
+      # assign the instance label without the port 
+      - source_labels: [instance]
+        target_label: instance
+        regex: ([^:\/]+)(:[0-9]+)?
+        replacement: $1

@@ -1,0 +1,38 @@
+azr-a-grafana01-sysconfig
+
+## Path:
+## Description: Grafana Agent monitoring agent settings
+## Type:        string
+## Default:     ""
+## ServiceRestart: grafana-agent
+#
+# Command line options for grafana-agent
+#
+# The configuration file holding the agent config
+CONFIG_FILE="/etc/grafana-agent.yaml"
+
+# Any user defined arguments
+CUSTOM_ARGS="-server.http.address=0.0.0.0:12345 -server.grpc.address=0.0.0.0:12346 -enable-features=integrations-next -config.expand-env=true -disable-reporting"
+
+# Restart on system upgrade. Default to true
+RESTART_ON_UPGRADE=true
+
+# Config environment variables
+AGENT_LOG_LEVEL="info"
+MIMIR_CPU_MEM_DISK_TENANT_URL="https://mimir-push-cpu-mem-disk-metrics.prod.azure.example.net/api/v1/push"
+MIMIR_SERVICE_PROCESS_TENANT_URL="https://mimir-push-service-process-metrics.prod.azure.example.net/api/v1/push"
+MIMIR_AGENT_TENANT_URL="https://mimir-push-agent-metrics.prod.azure.example.net/api/v1/push"
+LOKI_PUSH_API_URL="https://loki-write.prod.azure.example.net/loki/api/v1/push"
+
+# external_labels variables
+# These need to be adjusted per endpoint/server/vm/node
+OWNER_LABEL="myname"
+TEAM_LABEL="SRE"
+DEPT_LABEL="dt325"
+ENV_LABEL="prod"
+APP_LABEL="grafana-agent-intermediary"
+DATACENTER_LABEL="Azure West"
+SUBSCRIPTION_LABEL="Prod01"
+SILENCE_STATUS_LABEL="false"
+LEVEL_OF_SERVICE_LABEL="unix"
+SUPPORT_TIER_LABEL=""

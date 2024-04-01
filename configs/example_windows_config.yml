@@ -1,0 +1,168 @@
+server:
+  log_level: debug
+
+metrics:
+  wal_directory: C:\ProgramData\grafana-agent\wal
+  global:
+    scrape_interval: 60s
+    # Metrics external labels, which are a static set of labels we attach to EVERY metric
+    #-----------------------------------------------------------------------------------------------
+    external_labels:
+      owner: myname
+      team: SRE
+      dept: dt325
+      env: prod
+      app: k6
+      datacenter: azure-east
+  configs: 
+    # # This config will keep only metrics that are prefixed with node_ or windows_ 
+    # # and drop ones prefixed windows_process_ and windows_service_
+    # # The metrics are then sent to the middle-server running a Grafana agent to a
+    # # URL that is specific to each "instance" which is cpu-mem-disk in the config below
+    # #-----------------------------------------------------------------------------------------------    
+    # - name: cpu-mem-disk-metrics-middle-server
+    #   remote_write:
+    #     - url: http://azr-v-grafana02.example.net:12345/agent/api/v1/metrics/instance/cpu-mem-disk/write
+    #       write_relabel_configs:
+    #         - action: keep
+    #           source_labels: [__name__]
+    #           separator: ;
+    #           regex: ^(node|windows)_.+$
+    #         - action: drop
+    #           source_labels: [__name__]
+    #           separator: ;
+    #           regex: ^windows_(?:service|process)_.+$
+    #   scrape_configs: []
+
+    # This config uses two - url blocks to perform two seperate actions
+    # The first - url block uses a write_relabel_configs: block to 
+    # keep only metrics prefixed with node_ and windows_ but none that are windows_service_ or windows_process_
+    # The second - url block uses a write_relabel_configs: block to
+    # keep only metrics prefixed with windows_process_ and windows_service_
+    - name: windows_node_metrics-middle-server
+      remote_write:
+        - url: http://azr-v-grafana02.example.net:12345/agent/api/v1/metrics/instance/cpu-mem-disk/write
+          write_relabel_configs:
+            - action: keep
+              source_labels: [__name__]
+              separator: ;
+              regex: ^(node|windows)_.+$
+            - action: drop
+              source_labels: [__name__]
+              separator: ;
+              regex: ^windows_(?:service|process)_.+$
+        - url: http://azr-v-grafana02.example.net:12345/agent/api/v1/metrics/instance/service-process/write
+          write_relabel_configs:
+            - action: keep
+              source_labels: [__name__]
+              separator: ;
+              regex: ^windows_(?:service|process)_.+$        
+      scrape_configs: []
+
+    # # This config will keep only metrics that are prefixed with windows_service_ or windows_process_ 
+    # # The metrics are then sent to the middle-server running a Grafana agent to a
+    # # URL that is specific to each "instance" which is service-process in the config below
+    # #----------------------------------------------------------------------------------------------- 
+    # - name: service-process-metrics-middle-server
+    #   remote_write:
+    #     - url: http://azr-v-grafana02.example.net:12345/agent/api/v1/metrics/instance/service-process/write
+    #       write_relabel_configs:
+    #         - action: keep
+    #           source_labels: [__name__]
+    #           separator: ;
+    #           regex: ^windows_(?:service|process)_.+$        
+    #   scrape_configs: []
+
+    # This config will keep only metrics that are prefixed with agent_ 
+    # The metrics are then sent to the middle-server running a Grafana agent to a
+    # URL that is specific to each "instance" which is service-process in the config below
+    #----------------------------------------------------------------------------------------------- 
+    - name: agent-metrics-middle-server
+      remote_write:
+        - url: http://azr-v-grafana02.example.net:12345/agent/api/v1/metrics/instance/agent/write
+          write_relabel_configs:
+            - action: keep
+              source_labels: [__name__]
+              separator: ;
+              regex: ^agent_.+$
+      scrape_configs: []
+
+# logs:
+#   global:
+#     # Logs external labels, which are a static set of labels we attach to every single log
+#     external_labels:
+#       owner: EXAMPLE
+#       team: EXAMPLE
+#       dept: EXAMPLE
+#       env: EXAMPLE
+#       app: EXAMPLE
+#       datacenter: EXAMPLE 
+#   positions_directory: C:\ProgramData\grafana-agent\promtail-positions
+#   configs:
+#   - name: default
+#     clients:
+#       - url: https://azr-v-grafana02.example.net:12345/loki/api/v1/push
+#         tls_config:
+#           insecure_skip_verify: true
+#     scrape_configs:
+#     - job_name: windows-application
+#       windows_events:
+#         eventlog_name: Application
+#         use_incoming_timestamp: true
+#         bookmark_path: C:\ProgramData\grafana-agent\bookmark-application.xml
+#         exclude_event_data: true
+#         locale: 1033
+#         labels: {}
+#     - job_name: windows-system
+#       windows_events:
+#         eventlog_name: System
+#         use_incoming_timestamp: true
+#         bookmark_path: C:\ProgramData\grafana-agent\bookmark-system.xml
+#         exclude_event_data: true
+#         locale: 1033
+#         labels: {}
+#     # this is an example of taking an application log from an arbitrary location    
+#     - job_name: example_application_log
+#       static_configs:
+#       - target: 
+#         - localhost
+#         labels:
+#           __path__: /path/to/application/logfiles.log # can also use a glob i.e. /path/to/logsdir/logs.* and more
+
+integrations:
+  metrics:
+    autoscrape:
+      enable: true
+
+  # The windows_exporter provides windows server metrics
+  windows:
+    autoscrape:
+      metrics_instance: windows_node_metrics-middle-server
+      relabel_configs:
+        # strip the port from instance and assign as a label
+        - source_labels: [instance]
+          target_label: port
+          regex: .+:([0-9]+).*
+          replacement: $1
+        # assign the instance label without the port 
+        - source_labels: [instance]
+          target_label: instance
+          regex: ([^:\/]+)(:[0-9]+)?
+          replacement: $1
+    enabled_collectors: cpu,cs,logical_disk,net,os,system,textfile,process,service,time,logon
+    
+  # The agent integration provides useful information on the actual agent installed
+  agent:
+    autoscrape:
+      metrics_instance: agent-metrics-middle-server
+      relabel_configs:
+        # strip the port from instance and assign as a label
+        - source_labels: [instance]
+          target_label: port
+          regex: .+:([0-9]+).*
+          replacement: $1
+        # assign the instance label without the port 
+        - source_labels: [instance]
+          target_label: instance
+          regex: ([^:\/]+)(:[0-9]+)?
+          replacement: $1
